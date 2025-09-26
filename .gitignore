@@ -1,0 +1,22 @@
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+
+# Env
+.env
+
+# Build & deps
+node_modules/
+dist/
+
+# Local scripts / test
+generate-mock-data.ts
+populate-mock-data.js
+populate-mock-data.ts
+test-airtable.ts
+
+# Temp docs
+CONFLICT_RESOLUTION.md
+SYNC_REQUIREMENTS.md
