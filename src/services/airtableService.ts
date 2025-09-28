@@ -684,8 +684,24 @@ export class AirtableService {
             currentOperator = await this.getOperatorFromStaffId(currentOperatorRaw as string);
         }
 
-        // Extract last modified timestamp for conflict resolution
-        const lastModifiedAt = record.get('updated_at') as string;
+        // Extract and process last modified timestamp for conflict resolution
+        const updatedAtRaw = record.get('updated_at');
+        let lastModifiedAt: string;
+        if (updatedAtRaw) {
+            // Process updated_at the same way as created_at to ensure proper formatting
+            try {
+                lastModifiedAt = new Date(updatedAtRaw).toISOString();
+            } catch (error) {
+                console.warn('Date parsing failed for updated_at:', updatedAtRaw, 'using current date');
+                lastModifiedAt = new Date().toISOString();
+            }
+        } else {
+            // Fallback to current date if no updated_at (shouldn't happen for existing records)
+            lastModifiedAt = new Date().toISOString();
+        }
+
+        // Debug: Log the actual value we get from Airtable and the processed result
+        console.log(`🔍 TIMESTAMP DEBUG: Task ${record.id} - updated_at from Airtable: "${updatedAtRaw}" (type: ${typeof updatedAtRaw}) -> processed: "${lastModifiedAt}"`);
 
         return {
             id: record.id,
