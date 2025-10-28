@@ -115,11 +115,28 @@ router.post('/action', async (req, res) => {
             // COMPLETE_INSPECTION_CRITERIA removed - no longer needed in optimistic inspection flow
 
             case TaskAction.COMPLETE_INSPECTION:
+                // Get current task status before updating
+                const currentInspectionTask = await airtableService.getTaskById(task_id);
+                const oldInspectionStatus = currentInspectionTask?.status;
+
+                // Clear operator when completing - task is done, no operator needed
                 updatedTask = await airtableService.updateTaskStatus(
                     task_id,
-                    TaskStatus.COMPLETED,
-                    operator_id
+                    TaskStatus.COMPLETED
+                    // No operator_id - clears the current_operator field
                 );
+
+                // Log the action manually to preserve operator info in audit trail
+                if (operator_id && oldInspectionStatus) {
+                    await airtableService.logAction(
+                        operator_id,
+                        task_id,
+                        TaskAction.COMPLETE_INSPECTION,
+                        oldInspectionStatus,
+                        TaskStatus.COMPLETED,
+                        'Inspection completed successfully'
+                    );
+                }
                 break;
 
             case TaskAction.ENTER_CORRECTION:
@@ -148,11 +165,28 @@ router.post('/action', async (req, res) => {
 
             case TaskAction.RESOLVE_CORRECTION:
                 // Complete the task directly - no need for further inspection after correction
+                // Get current task status before updating
+                const currentCorrectionTask = await airtableService.getTaskById(task_id);
+                const oldCorrectionStatus = currentCorrectionTask?.status;
+
+                // Clear operator when completing - task is done, no operator needed
                 updatedTask = await airtableService.updateTaskStatus(
                     task_id,
-                    TaskStatus.COMPLETED,
-                    operator_id
+                    TaskStatus.COMPLETED
+                    // No operator_id - clears the current_operator field
                 );
+
+                // Log the action manually to preserve operator info in audit trail
+                if (operator_id && oldCorrectionStatus) {
+                    await airtableService.logAction(
+                        operator_id,
+                        task_id,
+                        TaskAction.RESOLVE_CORRECTION,
+                        oldCorrectionStatus,
+                        TaskStatus.COMPLETED,
+                        'Correction resolved and task completed'
+                    );
+                }
                 break;
 
             case TaskAction.LABEL_CREATED:
@@ -161,10 +195,11 @@ router.post('/action', async (req, res) => {
                 const currentTask = await airtableService.getTaskById(task_id);
                 const oldStatus = currentTask?.status;
 
+                // Clear operator when completing - task is done, no operator needed
                 updatedTask = await airtableService.updateTaskStatus(
                     task_id,
-                    TaskStatus.COMPLETED,
-                    operator_id
+                    TaskStatus.COMPLETED
+                    // No operator_id - clears the current_operator field
                 );
 
                 // Log the specific LABEL_CREATED action manually to preserve it in audit log
