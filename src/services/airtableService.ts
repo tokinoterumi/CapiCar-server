@@ -715,32 +715,48 @@ export class AirtableService {
         // Debug: Log the actual value we get from Airtable and the processed result
         console.log(`🔍 TIMESTAMP DEBUG: Task ${record.id} - updated_at from Airtable: "${updatedAtRaw}" (type: ${typeof updatedAtRaw}) -> processed: "${lastModifiedAt}"`);
 
-        // Process checklist JSON - handle both direct array and nested {"json": "..."} format
+        // Process checklist JSON - handle multiple formats from Airtable
         let checklistJson = '[]';
         const checklistRaw = record.get('checklist_json');
         if (checklistRaw) {
             if (typeof checklistRaw === 'string') {
                 try {
-                    // Try to parse to see if it's nested format
+                    // Try to parse to see what format we have
                     const parsed = JSON.parse(checklistRaw);
                     if (parsed.json && typeof parsed.json === 'string') {
-                        // Nested format: {"json": "[...]"}
+                        // Nested format: {"json": "..."} where inner can be object or array
                         console.log(`📦 CHECKLIST: Task ${record.id} - unwrapping nested JSON format`);
-                        checklistJson = parsed.json;
+                        const innerParsed = JSON.parse(parsed.json);
+                        // Ensure it's an array
+                        if (Array.isArray(innerParsed)) {
+                            // Already an array, use as-is
+                            checklistJson = parsed.json;
+                        } else {
+                            // Single object inside nested format - wrap in array
+                            console.log(`📦 CHECKLIST: Task ${record.id} - wrapping nested single object in array`);
+                            checklistJson = JSON.stringify([innerParsed]);
+                        }
                     } else if (Array.isArray(parsed)) {
-                        // Direct array format
+                        // Direct array format - perfect!
                         checklistJson = checklistRaw;
                     } else {
-                        // Unknown format, keep as-is
-                        checklistJson = checklistRaw;
+                        // Single object at top level - wrap it in an array
+                        console.log(`📦 CHECKLIST: Task ${record.id} - wrapping single object in array`);
+                        checklistJson = JSON.stringify([parsed]);
                     }
                 } catch (e) {
-                    // If parsing fails, use as-is
+                    // If parsing fails, use as-is (might be malformed)
+                    console.warn(`⚠️ CHECKLIST: Task ${record.id} - failed to parse, using as-is`);
                     checklistJson = checklistRaw;
                 }
             } else {
                 // Not a string, try to stringify
-                checklistJson = JSON.stringify(checklistRaw);
+                if (Array.isArray(checklistRaw)) {
+                    checklistJson = JSON.stringify(checklistRaw);
+                } else {
+                    // Single object, wrap in array
+                    checklistJson = JSON.stringify([checklistRaw]);
+                }
             }
         }
 
@@ -817,7 +833,7 @@ export class AirtableService {
             }
         }
 
-        // Process checklist JSON - handle both direct array and nested {"json": "..."} format
+        // Process checklist JSON - handle multiple formats from Airtable
         let checklistJson = '[]';
         const checklistRaw = record.get('checklist_json');
         if (checklistRaw) {
@@ -825,20 +841,35 @@ export class AirtableService {
                 try {
                     const parsed = JSON.parse(checklistRaw);
                     if (parsed.json && typeof parsed.json === 'string') {
-                        // Nested format: {"json": "[...]"}
+                        // Nested format: {"json": "..."} where inner can be object or array
                         console.log(`📦 CHECKLIST (Legacy): Task ${record.id} - unwrapping nested JSON format`);
-                        checklistJson = parsed.json;
+                        const innerParsed = JSON.parse(parsed.json);
+                        if (Array.isArray(innerParsed)) {
+                            // Already an array, use as-is
+                            checklistJson = parsed.json;
+                        } else {
+                            // Single object inside nested format - wrap in array
+                            console.log(`📦 CHECKLIST (Legacy): Task ${record.id} - wrapping nested single object in array`);
+                            checklistJson = JSON.stringify([innerParsed]);
+                        }
                     } else if (Array.isArray(parsed)) {
-                        // Direct array format
+                        // Direct array format - perfect!
                         checklistJson = checklistRaw;
                     } else {
-                        checklistJson = checklistRaw;
+                        // Single object at top level - wrap it in an array
+                        console.log(`📦 CHECKLIST (Legacy): Task ${record.id} - wrapping single object in array`);
+                        checklistJson = JSON.stringify([parsed]);
                     }
                 } catch (e) {
+                    console.warn(`⚠️ CHECKLIST (Legacy): Task ${record.id} - failed to parse`);
                     checklistJson = checklistRaw;
                 }
             } else {
-                checklistJson = JSON.stringify(checklistRaw);
+                if (Array.isArray(checklistRaw)) {
+                    checklistJson = JSON.stringify(checklistRaw);
+                } else {
+                    checklistJson = JSON.stringify([checklistRaw]);
+                }
             }
         }
 
