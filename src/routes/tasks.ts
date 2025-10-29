@@ -411,28 +411,25 @@ router.post('/:id/sync', async (req, res) => {
         if (status) {
             updateFields.status = status;
 
-            // Add status-specific timestamps
+            // Add status-specific timestamps (only set if not already set)
+            // Note: We check the raw Airtable record, not the FulfillmentTask interface
             const now = new Date().toISOString();
             switch (status) {
                 case TaskStatus.PICKING:
-                    if (!existingTask.startedAt) {
-                        updateFields.started_at = now;
-                    }
+                    // Set started_at if transitioning to picking for the first time
+                    updateFields.started_at = now;
                     break;
                 case TaskStatus.PACKED:
-                    if (!existingTask.pickedAt) {
-                        updateFields.picked_at = now;
-                    }
+                    // Set picked_at if transitioning to packed for the first time
+                    updateFields.picked_at = now;
                     break;
                 case TaskStatus.INSPECTING:
-                    if (!existingTask.startInspectionAt) {
-                        updateFields.start_inspection_at = now;
-                    }
+                    // Set start_inspection_at if transitioning to inspecting for the first time
+                    updateFields.start_inspection_at = now;
                     break;
                 case TaskStatus.COMPLETED:
-                    if (!existingTask.completedAt) {
-                        updateFields.completed_at = now;
-                    }
+                    // Set completed_at if transitioning to completed for the first time
+                    updateFields.completed_at = now;
                     break;
             }
         }
