@@ -374,4 +374,144 @@ router.get('/:id/history', async (req, res) => {
     }
 });
 
+// POST /api/tasks/:id/sync
+// Sync offline task state and audit logs (mono-directional: client → server)
+// This endpoint accepts the final task state and audit log entries without replaying actions
+router.post('/:id/sync', async (req, res) => {
+    try {
+        const task_id = req.params.id;
+        const {
+            status,
+            current_operator,
+            is_paused,
+            weight,
+            dimensions,
+            checklist_json,
+            audit_logs  // Array of audit log entries to copy
+        } = req.body;
+
+        console.log(`📥 SYNC ENDPOINT: Syncing task ${task_id} with status=${status}, operator=${current_operator || 'none'}`);
+        console.log(`📥 SYNC ENDPOINT: Received ${audit_logs?.length || 0} audit log entries to sync`);
+
+        // Validate task exists
+        const existingTask = await airtableService.getTaskById(task_id);
+        if (!existingTask) {
+            return res.status(404).json({
+                success: false,
+                error: 'Task not found'
+            });
+        }
+
+        // Build update fields for task state
+        const updateFields: any = {
+            updated_at: new Date().toISOString()
+        };
+
+        // Update status if provided
+        if (status) {
+            updateFields.status = status;
+
+            // Add status-specific timestamps
+            const now = new Date().toISOString();
+            switch (status) {
+                case TaskStatus.PICKING:
+                    if (!existingTask.startedAt) {
+                        updateFields.started_at = now;
+                    }
+                    break;
+                case TaskStatus.PACKED:
+                    if (!existingTask.pickedAt) {
+                        updateFields.picked_at = now;
+                    }
+                    break;
+                case TaskStatus.INSPECTING:
+                    if (!existingTask.startInspectionAt) {
+                        updateFields.start_inspection_at = now;
+                    }
+                    break;
+                case TaskStatus.COMPLETED:
+                    if (!existingTask.completedAt) {
+                        updateFields.completed_at = now;
+                    }
+                    break;
+            }
+        }
+
+        // Update operator (can be explicitly cleared with empty string)
+        if (current_operator !== undefined) {
+            updateFields.current_operator = current_operator || '';
+        }
+
+        // Update pause state
+        if (is_paused !== undefined) {
+            updateFields.is_paused = is_paused;
+        }
+
+        // Update weight if provided
+        if (weight !== undefined) {
+            updateFields.weight = weight;
+        }
+
+        // Update dimensions if provided
+        if (dimensions !== undefined) {
+            updateFields.dimensions = dimensions;
+        }
+
+        // Update checklist if provided
+        if (checklist_json !== undefined) {
+            updateFields.checklist_json = checklist_json;
+        }
+
+        // Update the task state
+        const updatedTask = await airtableService.updateTaskDirect(task_id, updateFields);
+        console.log(`✅ SYNC ENDPOINT: Task ${task_id} state updated successfully`);
+
+        // Copy audit log entries (if provided)
+        let syncedLogsCount = 0;
+        let failedLogsCount = 0;
+
+        if (audit_logs && Array.isArray(audit_logs) && audit_logs.length > 0) {
+            console.log(`📝 SYNC ENDPOINT: Copying ${audit_logs.length} audit log entries...`);
+
+            for (const logEntry of audit_logs) {
+                try {
+                    // Copy the audit log with the original timestamp
+                    await airtableService.logAction(
+                        logEntry.operator_id || 'unknown',
+                        task_id,
+                        logEntry.action_type,
+                        logEntry.old_value,
+                        logEntry.new_value,
+                        logEntry.details,
+                        logEntry.timestamp  // Use original timestamp from client
+                    );
+                    syncedLogsCount++;
+                } catch (logError) {
+                    console.error(`❌ SYNC ENDPOINT: Failed to copy audit log entry:`, logError);
+                    failedLogsCount++;
+                }
+            }
+
+            console.log(`✅ SYNC ENDPOINT: Copied ${syncedLogsCount}/${audit_logs.length} audit log entries (${failedLogsCount} failed)`);
+        }
+
+        res.json({
+            success: true,
+            data: {
+                task: updatedTask,
+                audit_logs_synced: syncedLogsCount,
+                audit_logs_failed: failedLogsCount
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ SYNC ENDPOINT: Sync error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to sync task',
+            message: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+});
+
 export default router;

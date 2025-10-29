@@ -213,6 +213,18 @@ export class AirtableService {
         }
     }
 
+    // Update task with provided fields directly (used by sync endpoint)
+    // Does NOT create audit logs - caller is responsible for that
+    async updateTaskDirect(taskId: string, updateFields: any): Promise<FulfillmentTask | null> {
+        try {
+            const record = await base(TASKS_TABLE).update(taskId, updateFields);
+            return await this.mapTaskRecord(record);
+        } catch (error) {
+            console.error('Error updating task directly:', error);
+            throw new Error('Failed to update task');
+        }
+    }
+
     // MARK: - Staff Operations
 
     async getAllStaff(): Promise<StaffMember[]> {
