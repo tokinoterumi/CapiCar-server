@@ -715,13 +715,42 @@ export class AirtableService {
         // Debug: Log the actual value we get from Airtable and the processed result
         console.log(`🔍 TIMESTAMP DEBUG: Task ${record.id} - updated_at from Airtable: "${updatedAtRaw}" (type: ${typeof updatedAtRaw}) -> processed: "${lastModifiedAt}"`);
 
+        // Process checklist JSON - handle both direct array and nested {"json": "..."} format
+        let checklistJson = '[]';
+        const checklistRaw = record.get('checklist_json');
+        if (checklistRaw) {
+            if (typeof checklistRaw === 'string') {
+                try {
+                    // Try to parse to see if it's nested format
+                    const parsed = JSON.parse(checklistRaw);
+                    if (parsed.json && typeof parsed.json === 'string') {
+                        // Nested format: {"json": "[...]"}
+                        console.log(`📦 CHECKLIST: Task ${record.id} - unwrapping nested JSON format`);
+                        checklistJson = parsed.json;
+                    } else if (Array.isArray(parsed)) {
+                        // Direct array format
+                        checklistJson = checklistRaw;
+                    } else {
+                        // Unknown format, keep as-is
+                        checklistJson = checklistRaw;
+                    }
+                } catch (e) {
+                    // If parsing fails, use as-is
+                    checklistJson = checklistRaw;
+                }
+            } else {
+                // Not a string, try to stringify
+                checklistJson = JSON.stringify(checklistRaw);
+            }
+        }
+
         return {
             id: record.id,
             orderName: record.get('order_name') as string || '',
             status: record.get('status') as TaskStatus || TaskStatus.PENDING,
             shippingName: record.get('shipping_name') as string || '',
             createdAt: createdAtISO,
-            checklistJson: record.get('checklist_json') as string || '[]',
+            checklistJson: checklistJson,
             currentOperator: currentOperator,
             // Shipping address fields
             shippingAddress1: record.get('shipping_address1') as string || undefined,
@@ -788,6 +817,30 @@ export class AirtableService {
             }
         }
 
+        // Process checklist JSON - handle both direct array and nested {"json": "..."} format
+        let checklistJson = '[]';
+        const checklistRaw = record.get('checklist_json');
+        if (checklistRaw) {
+            if (typeof checklistRaw === 'string') {
+                try {
+                    const parsed = JSON.parse(checklistRaw);
+                    if (parsed.json && typeof parsed.json === 'string') {
+                        // Nested format: {"json": "[...]"}
+                        console.log(`📦 CHECKLIST (Legacy): Task ${record.id} - unwrapping nested JSON format`);
+                        checklistJson = parsed.json;
+                    } else if (Array.isArray(parsed)) {
+                        // Direct array format
+                        checklistJson = checklistRaw;
+                    } else {
+                        checklistJson = checklistRaw;
+                    }
+                } catch (e) {
+                    checklistJson = checklistRaw;
+                }
+            } else {
+                checklistJson = JSON.stringify(checklistRaw);
+            }
+        }
 
         return {
             id: record.id,
@@ -795,7 +848,7 @@ export class AirtableService {
             status: record.get('status') as TaskStatus || TaskStatus.PENDING,
             shippingName: record.get('shipping_name') as string || '',
             createdAt: createdAtISO,
-            checklistJson: record.get('checklist_json') as string || '[]',
+            checklistJson: checklistJson,
             currentOperator: currentOperator,
             // Shipping address fields
             shippingAddress1: record.get('shipping_address1') as string || undefined,
